@@ -11,10 +11,12 @@ const Whiteboard = () => {
   const { user } = useAuth()
   const navigate = useNavigate()
 
+  // Refs
   const canvasRef = useRef(null)
   const fabricCanvasRef = useRef(null)
   const socketRef = useRef(null)
 
+  // State
   const [tool, setTool] = useState("pen")
   const [color, setColor] = useState("#000000")
   const [brushWidth, setBrushWidth] = useState(5)
@@ -24,16 +26,62 @@ const Whiteboard = () => {
   const [isDrawing, setIsDrawing] = useState(false)
 
   useEffect(() => {
-    // Initialize Fabric.js canvas
+    initializeCanvas()
+    initializeSocket()
+
+    return () => {
+      cleanup()
+    }
+  }, [boardId, user])
+
+  const initializeCanvas = () => {
     const canvas = new fabric.Canvas(canvasRef.current, {
-      width: window.innerWidth - 300,
-      height: window.innerHeight - 100,
+      width: window.innerWidth - 350,
+      height: window.innerHeight - 120,
       backgroundColor: "white",
+      selection: false,
     })
 
     fabricCanvasRef.current = canvas
 
-    // Initialize Socket.IO connection
+    // Set up drawing mode
+    canvas.isDrawingMode = true
+    canvas.freeDrawingBrush.width = brushWidth
+    canvas.freeDrawingBrush.color = color
+
+    // Canvas event listeners
+    canvas.on("path:created", (e) => {
+      const path = e.path
+      const pathData = {
+        type: "path",
+        path: path.path,
+        stroke: path.stroke,
+        strokeWidth: path.strokeWidth,
+        fill: path.fill,
+      }
+
+      socketRef.current?.emit("drawing", {
+        boardId,
+        data: pathData,
+      })
+    })
+
+    // Handle window resize
+    const handleResize = () => {
+      canvas.setDimensions({
+        width: window.innerWidth - 350,
+        height: window.innerHeight - 120,
+      })
+    }
+
+    window.addEventListener("resize", handleResize)
+
+    return () => {
+      window.removeEventListener("resize", handleResize)
+    }
+  }
+
+  const initializeSocket = () => {
     socketRef.current = io("http://localhost:5000", {
       auth: {
         token: localStorage.getItem("token"),
@@ -51,46 +99,19 @@ const Whiteboard = () => {
     })
 
     socket.on("user-joined", (data) => {
-      setChatMessages((prev) => [
-        ...prev,
-        {
-          type: "system",
-          message: `${data.username} joined the board`,
-          timestamp: new Date(),
-        },
-      ])
+      addSystemMessage(`${data.username} joined the board`)
     })
 
     socket.on("user-left", (data) => {
-      setChatMessages((prev) => [
-        ...prev,
-        {
-          type: "system",
-          message: `${data.username} left the board`,
-          timestamp: new Date(),
-        },
-      ])
+      addSystemMessage(`${data.username} left the board`)
     })
 
     socket.on("users-update", (users) => {
       setConnectedUsers(users)
     })
 
-    socket.on("drawing-data", (data) => {
-      if (data.type === "path") {
-        const path = new fabric.Path(data.path, {
-          stroke: data.color,
-          strokeWidth: data.width,
-          fill: "",
-          selectable: false,
-        })
-        canvas.add(path)
-        canvas.renderAll()
-      } else if (data.type === "clear") {
-        canvas.clear()
-        canvas.backgroundColor = "white"
-        canvas.renderAll()
-      }
+    socket.on("drawing-data", (drawingData) => {
+      handleRemoteDrawing(drawingData)
     })
 
     socket.on("chat-message", (message) => {
@@ -99,103 +120,116 @@ const Whiteboard = () => {
 
     socket.on("board-data", (boardData) => {
       if (boardData && boardData.canvasData) {
-        canvas.loadFromJSON(boardData.canvasData, () => {
-          canvas.renderAll()
-        })
+        loadBoardData(boardData.canvasData)
       }
     })
 
-    // Canvas event listeners
-    let isDrawing = false
-    let currentPath = []
-
-    canvas.on("mouse:down", (e) => {
-      if (tool === "pen") {
-        isDrawing = true
-        const pointer = canvas.getPointer(e.e)
-        currentPath = [`M ${pointer.x} ${pointer.y}`]
-      }
-    })
-
-    canvas.on("mouse:move", (e) => {
-      if (isDrawing && tool === "pen") {
-        const pointer = canvas.getPointer(e.e)
-        currentPath.push(`L ${pointer.x} ${pointer.y}`)
-
-        // Create temporary path for real-time drawing
-        const pathString = currentPath.join(" ")
-        const tempPath = new fabric.Path(pathString, {
-          stroke: color,
-          strokeWidth: brushWidth,
-          fill: "",
-          selectable: false,
-        })
-
-        canvas.remove(canvas.getObjects().filter((obj) => obj.temp)[0])
-        tempPath.temp = true
-        canvas.add(tempPath)
-        canvas.renderAll()
-      }
-    })
-
-    canvas.on("mouse:up", () => {
-      if (isDrawing && tool === "pen") {
-        isDrawing = false
-        const pathString = currentPath.join(" ")
-
-        // Remove temporary path and add final path
-        canvas.remove(canvas.getObjects().filter((obj) => obj.temp)[0])
-        const finalPath = new fabric.Path(pathString, {
-          stroke: color,
-          strokeWidth: brushWidth,
-          fill: "",
-          selectable: false,
-        })
-        canvas.add(finalPath)
-        canvas.renderAll()
-
-        // Emit drawing data to other users
-        socket.emit("drawing", {
-          boardId,
-          type: "path",
-          path: pathString,
-          color,
-          width: brushWidth,
-        })
-
-        currentPath = []
-      }
-    })
-
-    // Handle window resize
-    const handleResize = () => {
-      canvas.setDimensions({
-        width: window.innerWidth - 300,
-        height: window.innerHeight - 100,
-      })
-    }
-
-    window.addEventListener("resize", handleResize)
-
-    return () => {
-      canvas.dispose()
-      socket.disconnect()
-      window.removeEventListener("resize", handleResize)
-    }
-  }, [boardId, user, color, brushWidth, tool])
-
-  const clearCanvas = () => {
-    fabricCanvasRef.current.clear()
-    fabricCanvasRef.current.backgroundColor = "white"
-    fabricCanvasRef.current.renderAll()
-
-    socketRef.current.emit("drawing", {
-      boardId,
-      type: "clear",
+    socket.on("board-cleared", () => {
+      clearCanvas(false)
     })
   }
 
-  const undo = () => {
+  const handleRemoteDrawing = (data) => {
+    const canvas = fabricCanvasRef.current
+    if (!canvas) return
+
+    if (data.type === "clear") {
+      canvas.clear()
+      canvas.backgroundColor = "white"
+      canvas.renderAll()
+    } else if (data.type === "path") {
+      const path = new fabric.Path(data.path, {
+        stroke: data.stroke,
+        strokeWidth: data.strokeWidth,
+        fill: data.fill || "",
+        selectable: false,
+        evented: false,
+      })
+      canvas.add(path)
+      canvas.renderAll()
+    }
+  }
+
+  const addSystemMessage = (message) => {
+    setChatMessages((prev) => [
+      ...prev,
+      {
+        type: "system",
+        message: message,
+        timestamp: new Date(),
+      },
+    ])
+  }
+
+  const loadBoardData = (canvasData) => {
+    const canvas = fabricCanvasRef.current
+    if (canvas && canvasData) {
+      try {
+        canvas.loadFromJSON(canvasData, () => {
+          canvas.renderAll()
+        })
+      } catch (error) {
+        console.error("Error loading board data:", error)
+      }
+    }
+  }
+
+  const cleanup = () => {
+    if (fabricCanvasRef.current) {
+      fabricCanvasRef.current.dispose()
+    }
+    if (socketRef.current) {
+      socketRef.current.disconnect()
+    }
+  }
+
+  // Tool handlers
+  const handleToolChange = (newTool) => {
+    setTool(newTool)
+    const canvas = fabricCanvasRef.current
+
+    if (newTool === "pen") {
+      canvas.isDrawingMode = true
+      canvas.freeDrawingBrush.width = brushWidth
+      canvas.freeDrawingBrush.color = color
+    } else if (newTool === "eraser") {
+      canvas.isDrawingMode = true
+      canvas.freeDrawingBrush.width = brushWidth * 2
+      canvas.freeDrawingBrush.color = "white"
+    }
+  }
+
+  const handleColorChange = (newColor) => {
+    setColor(newColor)
+    const canvas = fabricCanvasRef.current
+    if (canvas && tool === "pen") {
+      canvas.freeDrawingBrush.color = newColor
+    }
+  }
+
+  const handleBrushWidthChange = (newWidth) => {
+    setBrushWidth(newWidth)
+    const canvas = fabricCanvasRef.current
+    if (canvas) {
+      canvas.freeDrawingBrush.width = tool === "eraser" ? newWidth * 2 : newWidth
+    }
+  }
+
+  const clearCanvas = (emit = true) => {
+    const canvas = fabricCanvasRef.current
+    canvas.clear()
+    canvas.backgroundColor = "white"
+    canvas.renderAll()
+
+    if (emit) {
+      socketRef.current?.emit("drawing", {
+        boardId,
+        data: { type: "clear" },
+      })
+    }
+  }
+
+  const undoLastAction = () => {
     const canvas = fabricCanvasRef.current
     const objects = canvas.getObjects()
     if (objects.length > 0) {
@@ -204,29 +238,30 @@ const Whiteboard = () => {
     }
   }
 
+  const saveBoard = () => {
+    const canvas = fabricCanvasRef.current
+    const canvasData = JSON.stringify(canvas.toJSON())
+
+    socketRef.current?.emit("save-board", {
+      boardId,
+      canvasData,
+    })
+
+    alert("Board saved successfully! 💾")
+  }
+
   const exportCanvas = () => {
     const canvas = fabricCanvasRef.current
     const dataURL = canvas.toDataURL({
       format: "png",
       quality: 1,
+      multiplier: 2,
     })
 
     const link = document.createElement("a")
-    link.download = `whiteboard-${boardId}.png`
+    link.download = `whiteboard-${boardId}-${new Date().toISOString().split("T")[0]}.png`
     link.href = dataURL
     link.click()
-  }
-
-  const saveBoard = () => {
-    const canvas = fabricCanvasRef.current
-    const canvasData = JSON.stringify(canvas.toJSON())
-
-    socketRef.current.emit("save-board", {
-      boardId,
-      canvasData,
-    })
-
-    alert("Board saved successfully!")
   }
 
   const sendChatMessage = () => {
@@ -237,7 +272,7 @@ const Whiteboard = () => {
         timestamp: new Date(),
       }
 
-      socketRef.current.emit("chat-message", { boardId, message })
+      socketRef.current?.emit("chat-message", { boardId, message })
       setChatInput("")
     }
   }
@@ -248,15 +283,23 @@ const Whiteboard = () => {
     }
   }
 
+  const copyBoardId = () => {
+    navigator.clipboard.writeText(boardId)
+    alert("Board ID copied to clipboard! 📋")
+  }
+
   return (
     <div className="whiteboard-container">
       <div className="whiteboard-header">
         <div className="whiteboard-tools">
           <div className="tool-group">
-            <button className={`tool-btn ${tool === "pen" ? "active" : ""}`} onClick={() => setTool("pen")}>
+            <button className={`tool-btn ${tool === "pen" ? "active" : ""}`} onClick={() => handleToolChange("pen")}>
               ✏️ Pen
             </button>
-            <button className={`tool-btn ${tool === "eraser" ? "active" : ""}`} onClick={() => setTool("eraser")}>
+            <button
+              className={`tool-btn ${tool === "eraser" ? "active" : ""}`}
+              onClick={() => handleToolChange("eraser")}
+            >
               🧹 Eraser
             </button>
           </div>
@@ -265,16 +308,17 @@ const Whiteboard = () => {
             <input
               type="color"
               value={color}
-              onChange={(e) => setColor(e.target.value)}
+              onChange={(e) => handleColorChange(e.target.value)}
               className="color-picker"
               title="Choose color"
+              disabled={tool === "eraser"}
             />
             <input
               type="range"
               min="1"
               max="20"
               value={brushWidth}
-              onChange={(e) => setBrushWidth(Number.parseInt(e.target.value))}
+              onChange={(e) => handleBrushWidthChange(Number.parseInt(e.target.value))}
               className="width-slider"
               title="Brush width"
             />
@@ -282,34 +326,30 @@ const Whiteboard = () => {
           </div>
 
           <div className="tool-group">
-            <button className="tool-btn" onClick={undo}>
+            <button className="tool-btn" onClick={undoLastAction} title="Undo last action">
               ↶ Undo
             </button>
-            <button className="tool-btn" onClick={clearCanvas}>
+            <button className="tool-btn" onClick={() => clearCanvas(true)} title="Clear entire board">
               🗑️ Clear
             </button>
           </div>
 
           <div className="tool-group">
-            <button className="tool-btn" onClick={saveBoard}>
+            <button className="tool-btn" onClick={saveBoard} title="Save board to database">
               💾 Save
             </button>
-            <button className="tool-btn" onClick={exportCanvas}>
-              📥 Export PNG
+            <button className="tool-btn" onClick={exportCanvas} title="Export as PNG">
+              📥 Export
             </button>
           </div>
         </div>
 
-        <div>
-          <span>
-            Board ID: <strong>{boardId}</strong>
-          </span>
-          <button
-            className="btn"
-            onClick={() => navigate("/dashboard")}
-            style={{ marginLeft: "1rem", padding: "0.5rem 1rem", width: "auto" }}
-          >
-            Back to Dashboard
+        <div className="board-info">
+          <div className="board-id" onClick={copyBoardId} title="Click to copy">
+            ID: {boardId}
+          </div>
+          <button className="btn btn-small" onClick={() => navigate("/dashboard")}>
+            ← Dashboard
           </button>
         </div>
       </div>
@@ -321,12 +361,13 @@ const Whiteboard = () => {
 
         <div className="sidebar">
           <div className="users-panel">
-            <h3>Connected Users ({connectedUsers.length})</h3>
+            <h3>Online Users ({connectedUsers.length})</h3>
             <ul className="user-list">
-              {connectedUsers.map((user, index) => (
+              {connectedUsers.map((username, index) => (
                 <li key={index} className="user-item">
                   <div className="user-status"></div>
-                  <span>{user}</span>
+                  <span>{username}</span>
+                  {username === user?.username && <span> (You)</span>}
                 </li>
               ))}
             </ul>
@@ -336,13 +377,13 @@ const Whiteboard = () => {
             <h3>Chat</h3>
             <div className="chat-messages">
               {chatMessages.map((msg, index) => (
-                <div key={index} className="chat-message">
+                <div key={index} className={`chat-message ${msg.type === "system" ? "system" : ""}`}>
                   {msg.type === "system" ? (
-                    <em style={{ color: "#666" }}>{msg.message}</em>
+                    <div className="message">{msg.message}</div>
                   ) : (
                     <>
-                      <div className="username">{msg.username}:</div>
-                      <div>{msg.message}</div>
+                      <div className="username">{msg.username}</div>
+                      <div className="message">{msg.message}</div>
                     </>
                   )}
                 </div>

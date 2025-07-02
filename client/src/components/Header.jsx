@@ -15,14 +15,14 @@ const Header = () => {
     <header className="header">
       <div className="header-content">
         <Link to="/" className="logo">
-          🎨 Collaborative Whiteboard
+          🎨 React Whiteboard
         </Link>
         <nav className="nav-links">
           {user ? (
             <>
               <Link to="/dashboard">Dashboard</Link>
-              <span>Welcome, {user.username}!</span>
-              <button onClick={handleLogout} className="btn" style={{ padding: "0.5rem 1rem", width: "auto" }}>
+              <span className="user-info">Welcome, {user.username}!</span>
+              <button onClick={handleLogout} className="btn btn-small">
                 Logout
               </button>
             </>

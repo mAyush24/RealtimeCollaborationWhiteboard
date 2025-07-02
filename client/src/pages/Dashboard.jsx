@@ -10,11 +10,16 @@ const Dashboard = () => {
   const { user } = useAuth()
   const navigate = useNavigate()
 
+  const generateBoardId = () => {
+    return Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15)
+  }
+
   const createNewBoard = () => {
     setLoading(true)
-    // Generate a random board ID
-    const newBoardId = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15)
-    navigate(`/board/${newBoardId}`)
+    const newBoardId = generateBoardId()
+    setTimeout(() => {
+      navigate(`/board/${newBoardId}`)
+    }, 500)
   }
 
   const joinBoard = () => {
@@ -25,30 +30,36 @@ const Dashboard = () => {
     navigate(`/board/${boardId.trim()}`)
   }
 
+  const handleKeyPress = (e) => {
+    if (e.key === "Enter") {
+      joinBoard()
+    }
+  }
+
   return (
     <div className="container">
       <div className="dashboard">
-        <h1>Welcome back, {user?.username}!</h1>
+        <h1>Welcome back, {user?.username}! 👋</h1>
 
         <div className="dashboard-actions">
           <div className="action-card">
             <h3>🎨 Create New Board</h3>
-            <p>Start a new collaborative whiteboard session</p>
+            <p>Start a fresh collaborative whiteboard session and invite others to join you in real-time drawing.</p>
             <button className="btn" onClick={createNewBoard} disabled={loading}>
-              {loading ? "Creating..." : "Create New Board"}
+              {loading ? "Creating Board..." : "Create New Board"}
             </button>
           </div>
 
           <div className="action-card">
             <h3>🔗 Join Existing Board</h3>
-            <p>Enter a board ID to join an existing session</p>
+            <p>Enter a board ID shared by someone else to join their collaborative whiteboard session.</p>
             <div className="board-input">
               <input
                 type="text"
-                placeholder="Enter Board ID"
+                placeholder="Enter Board ID (e.g., abc123def456)"
                 value={boardId}
                 onChange={(e) => setBoardId(e.target.value)}
-                onKeyPress={(e) => e.key === "Enter" && joinBoard()}
+                onKeyPress={handleKeyPress}
               />
               <button className="btn" onClick={joinBoard}>
                 Join Board
@@ -57,30 +68,20 @@ const Dashboard = () => {
           </div>
         </div>
 
-        <div
-          style={{
-            marginTop: "2rem",
-            padding: "1.5rem",
-            background: "white",
-            borderRadius: "10px",
-            boxShadow: "0 5px 15px rgba(0,0,0,0.1)",
-          }}
-        >
-          <h3 style={{ marginBottom: "1rem" }}>📋 How to Use</h3>
-          <ul style={{ listStyle: "none", padding: 0 }}>
-            <li style={{ marginBottom: "0.5rem", padding: "0.5rem", background: "#f8f9fa", borderRadius: "5px" }}>
-              <strong>Create:</strong> Click "Create New Board" to start a new whiteboard session
-            </li>
-            <li style={{ marginBottom: "0.5rem", padding: "0.5rem", background: "#f8f9fa", borderRadius: "5px" }}>
-              <strong>Join:</strong> Enter a board ID to join an existing session with others
-            </li>
-            <li style={{ marginBottom: "0.5rem", padding: "0.5rem", background: "#f8f9fa", borderRadius: "5px" }}>
-              <strong>Share:</strong> Share the board ID with others to collaborate in real-time
-            </li>
-            <li style={{ padding: "0.5rem", background: "#f8f9fa", borderRadius: "5px" }}>
-              <strong>Export:</strong> Save your work as PNG when you're done
-            </li>
-          </ul>
+        <div className="instructions-card">
+          <h3>📋 How to Get Started</h3>
+          <div className="instruction-item">
+            <strong>Create:</strong> Click "Create New Board" to start a new whiteboard session with a unique ID
+          </div>
+          <div className="instruction-item">
+            <strong>Share:</strong> Copy the board ID from the whiteboard and share it with your team members
+          </div>
+          <div className="instruction-item">
+            <strong>Collaborate:</strong> Draw together in real-time, chat, and see who's online
+          </div>
+          <div className="instruction-item">
+            <strong>Save:</strong> Your work is automatically saved and can be exported as PNG images
+          </div>
         </div>
       </div>
     </div>

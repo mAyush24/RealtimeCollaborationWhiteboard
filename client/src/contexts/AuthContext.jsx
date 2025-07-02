@@ -21,7 +21,6 @@ export const AuthProvider = ({ children }) => {
     const token = localStorage.getItem("token")
     if (token) {
       axios.defaults.headers.common["Authorization"] = `Bearer ${token}`
-      // Verify token with backend
       verifyToken()
     } else {
       setLoading(false)
@@ -33,6 +32,7 @@ export const AuthProvider = ({ children }) => {
       const response = await axios.get("/api/auth/verify")
       setUser(response.data.user)
     } catch (error) {
+      console.error("Token verification failed:", error)
       localStorage.removeItem("token")
       delete axios.defaults.headers.common["Authorization"]
     } finally {

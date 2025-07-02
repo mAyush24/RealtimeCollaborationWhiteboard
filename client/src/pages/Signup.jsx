@@ -36,6 +36,18 @@ const Signup = () => {
       return
     }
 
+    if (formData.username.length < 3) {
+      setError("Username must be at least 3 characters long")
+      setLoading(false)
+      return
+    }
+
+    if (!formData.email.includes("@")) {
+      setError("Please enter a valid email address")
+      setLoading(false)
+      return
+    }
+
     if (formData.password !== formData.confirmPassword) {
       setError("Passwords do not match")
       setLoading(false)
@@ -62,16 +74,32 @@ const Signup = () => {
   return (
     <div className="auth-container">
       <form className="auth-form" onSubmit={handleSubmit}>
-        <h2>Create Your Account</h2>
+        <h2>Create Account</h2>
 
         <div className="form-group">
           <label htmlFor="username">Username</label>
-          <input type="text" id="username" name="username" value={formData.username} onChange={handleChange} required />
+          <input
+            type="text"
+            id="username"
+            name="username"
+            value={formData.username}
+            onChange={handleChange}
+            placeholder="Choose a username"
+            required
+          />
         </div>
 
         <div className="form-group">
-          <label htmlFor="email">Email</label>
-          <input type="email" id="email" name="email" value={formData.email} onChange={handleChange} required />
+          <label htmlFor="email">Email Address</label>
+          <input
+            type="email"
+            id="email"
+            name="email"
+            value={formData.email}
+            onChange={handleChange}
+            placeholder="Enter your email"
+            required
+          />
         </div>
 
         <div className="form-group">
@@ -82,6 +110,7 @@ const Signup = () => {
             name="password"
             value={formData.password}
             onChange={handleChange}
+            placeholder="Create a password"
             required
           />
         </div>
@@ -94,18 +123,22 @@ const Signup = () => {
             name="confirmPassword"
             value={formData.confirmPassword}
             onChange={handleChange}
+            placeholder="Confirm your password"
             required
           />
         </div>
 
         <button type="submit" className="btn" disabled={loading}>
-          {loading ? "Creating Account..." : "Sign Up"}
+          {loading ? "Creating Account..." : "Create Account"}
         </button>
 
         {error && <div className="error-message">{error}</div>}
 
-        <p style={{ textAlign: "center", marginTop: "1rem" }}>
-          Already have an account? <Link to="/login">Login here</Link>
+        <p className="text-center mt-3">
+          Already have an account?{" "}
+          <Link to="/login" style={{ color: "#667eea", textDecoration: "none" }}>
+            Sign in here
+          </Link>
         </p>
       </form>
     </div>

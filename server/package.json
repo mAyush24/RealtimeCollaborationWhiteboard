@@ -1,7 +1,7 @@
 {
-  "name": "whiteboard-server",
+  "name": "react-whiteboard-server",
   "version": "1.0.0",
-  "description": "Backend for collaborative whiteboard",
+  "description": "Backend server for React collaborative whiteboard",
   "main": "index.js",
   "type": "module",
   "scripts": {

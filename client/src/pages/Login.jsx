@@ -27,8 +27,15 @@ const Login = () => {
     setError("")
     setLoading(true)
 
+    // Basic validation
     if (!formData.email || !formData.password) {
       setError("Please fill in all fields")
+      setLoading(false)
+      return
+    }
+
+    if (!formData.email.includes("@")) {
+      setError("Please enter a valid email address")
       setLoading(false)
       return
     }
@@ -47,11 +54,19 @@ const Login = () => {
   return (
     <div className="auth-container">
       <form className="auth-form" onSubmit={handleSubmit}>
-        <h2>Login to Your Account</h2>
+        <h2>Welcome Back</h2>
 
         <div className="form-group">
-          <label htmlFor="email">Email</label>
-          <input type="email" id="email" name="email" value={formData.email} onChange={handleChange} required />
+          <label htmlFor="email">Email Address</label>
+          <input
+            type="email"
+            id="email"
+            name="email"
+            value={formData.email}
+            onChange={handleChange}
+            placeholder="Enter your email"
+            required
+          />
         </div>
 
         <div className="form-group">
@@ -62,18 +77,22 @@ const Login = () => {
             name="password"
             value={formData.password}
             onChange={handleChange}
+            placeholder="Enter your password"
             required
           />
         </div>
 
         <button type="submit" className="btn" disabled={loading}>
-          {loading ? "Logging in..." : "Login"}
+          {loading ? "Signing in..." : "Sign In"}
         </button>
 
         {error && <div className="error-message">{error}</div>}
 
-        <p style={{ textAlign: "center", marginTop: "1rem" }}>
-          Don't have an account? <Link to="/signup">Sign up here</Link>
+        <p className="text-center mt-3">
+          Don't have an account?{" "}
+          <Link to="/signup" style={{ color: "#667eea", textDecoration: "none" }}>
+            Create one here
+          </Link>
         </p>
       </form>
     </div>

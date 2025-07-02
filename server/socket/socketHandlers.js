@@ -4,7 +4,7 @@ import Board from "../models/Board.js"
 const activeRooms = new Map()
 
 export const handleConnection = (io, socket) => {
-  console.log(`User ${socket.username} connected`)
+  console.log(`👋 User ${socket.username} connected to socket`)
 
   // Handle joining a board
   socket.on("join-board", async ({ boardId, user }) => {
@@ -19,7 +19,7 @@ export const handleConnection = (io, socket) => {
       activeRooms.get(boardId).add(socket.username)
 
       // Load and send existing board data
-      const board = await Board.findOne({ boardId })
+      const board = await Board.findOne({ boardId, isActive: true })
       if (board && board.canvasData) {
         socket.emit("board-data", {
           canvasData: board.canvasData,
@@ -33,7 +33,7 @@ export const handleConnection = (io, socket) => {
       const users = Array.from(activeRooms.get(boardId))
       io.to(boardId).emit("users-update", users)
 
-      console.log(`User ${socket.username} joined board ${boardId}`)
+      console.log(`🎨 User ${socket.username} joined board ${boardId}`)
     } catch (error) {
       console.error("Join board error:", error)
       socket.emit("error", { message: "Failed to join board" })
@@ -41,19 +41,24 @@ export const handleConnection = (io, socket) => {
   })
 
   // Handle drawing events
-  socket.on("drawing", (data) => {
-    socket.to(data.boardId).emit("drawing-data", data)
+  socket.on("drawing", (drawingData) => {
+    if (socket.currentBoard) {
+      socket.to(socket.currentBoard).emit("drawing-data", drawingData.data)
+    }
   })
 
   // Handle chat messages
   socket.on("chat-message", ({ boardId, message }) => {
-    io.to(boardId).emit("chat-message", message)
+    if (socket.currentBoard === boardId) {
+      io.to(boardId).emit("chat-message", message)
+      console.log(`💬 Chat message in ${boardId} from ${socket.username}`)
+    }
   })
 
   // Handle saving board
   socket.on("save-board", async ({ boardId, canvasData }) => {
     try {
-      let board = await Board.findOne({ boardId })
+      let board = await Board.findOne({ boardId, isActive: true })
 
       if (!board) {
         board = new Board({
@@ -69,24 +74,27 @@ export const handleConnection = (io, socket) => {
 
       await board.save()
       socket.emit("board-saved", { success: true })
+      console.log(`💾 Board ${boardId} saved by ${socket.username}`)
     } catch (error) {
       console.error("Save board error:", error)
       socket.emit("board-saved", { success: false, error: error.message })
     }
   })
 
-  // Handle cursor movement (optional feature)
+  // Handle cursor movement (optional feature for future enhancement)
   socket.on("cursor-move", (data) => {
-    socket.to(data.boardId).emit("cursor-update", {
-      username: socket.username,
-      x: data.x,
-      y: data.y,
-    })
+    if (socket.currentBoard) {
+      socket.to(socket.currentBoard).emit("cursor-update", {
+        username: socket.username,
+        x: data.x,
+        y: data.y,
+      })
+    }
   })
 
   // Handle disconnection
   socket.on("disconnect", () => {
-    console.log(`User ${socket.username} disconnected`)
+    console.log(`👋 User ${socket.username} disconnected`)
 
     if (socket.currentBoard) {
       const boardId = socket.currentBoard
@@ -98,6 +106,7 @@ export const handleConnection = (io, socket) => {
         // If room is empty, remove it
         if (activeRooms.get(boardId).size === 0) {
           activeRooms.delete(boardId)
+          console.log(`🗑️ Empty room ${boardId} cleaned up`)
         } else {
           // Send updated user list
           const users = Array.from(activeRooms.get(boardId))

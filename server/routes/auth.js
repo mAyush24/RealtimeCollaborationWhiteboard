@@ -15,32 +15,51 @@ router.post("/signup", async (req, res) => {
       return res.status(400).json({ message: "All fields are required" })
     }
 
+    if (username.length < 3) {
+      return res.status(400).json({ message: "Username must be at least 3 characters long" })
+    }
+
     if (password.length < 6) {
       return res.status(400).json({ message: "Password must be at least 6 characters long" })
     }
 
     // Check if user already exists
     const existingUser = await User.findOne({
-      $or: [{ email }, { username }],
+      $or: [{ email: email.toLowerCase() }, { username: username.toLowerCase() }],
     })
 
     if (existingUser) {
-      return res.status(400).json({
-        message: existingUser.email === email ? "Email already exists" : "Username already exists",
-      })
+      if (existingUser.email === email.toLowerCase()) {
+        return res.status(400).json({ message: "Email already registered" })
+      } else {
+        return res.status(400).json({ message: "Username already taken" })
+      }
     }
 
     // Create new user
-    const user = new User({ username, email, password })
+    const user = new User({
+      username: username.trim(),
+      email: email.toLowerCase().trim(),
+      password,
+    })
+
     await user.save()
 
     // Generate JWT token
-    const token = jwt.sign({ userId: user._id, username: user.username }, process.env.JWT_SECRET || "your-secret-key", {
-      expiresIn: "7d",
-    })
+    const token = jwt.sign(
+      {
+        userId: user._id,
+        username: user.username,
+        email: user.email,
+      },
+      process.env.JWT_SECRET || "your-secret-key",
+      { expiresIn: "7d" },
+    )
+
+    console.log(`✅ New user registered: ${user.username} (${user.email})`)
 
     res.status(201).json({
-      message: "User created successfully",
+      message: "Account created successfully",
       token,
       user: {
         id: user._id,
@@ -50,7 +69,11 @@ router.post("/signup", async (req, res) => {
     })
   } catch (error) {
     console.error("Signup error:", error)
-    res.status(500).json({ message: "Server error" })
+    if (error.name === "ValidationError") {
+      const messages = Object.values(error.errors).map((err) => err.message)
+      return res.status(400).json({ message: messages.join(", ") })
+    }
+    res.status(500).json({ message: "Server error during registration" })
   }
 })
 
@@ -64,22 +87,34 @@ router.post("/login", async (req, res) => {
       return res.status(400).json({ message: "Email and password are required" })
     }
 
-    // Find user
-    const user = await User.findOne({ email })
+    // Find user by email
+    const user = await User.findOne({ email: email.toLowerCase().trim() })
     if (!user) {
-      return res.status(400).json({ message: "Invalid credentials" })
+      return res.status(400).json({ message: "Invalid email or password" })
     }
 
     // Check password
     const isMatch = await user.comparePassword(password)
     if (!isMatch) {
-      return res.status(400).json({ message: "Invalid credentials" })
+      return res.status(400).json({ message: "Invalid email or password" })
     }
 
+    // Update last active
+    user.lastActive = new Date()
+    await user.save()
+
     // Generate JWT token
-    const token = jwt.sign({ userId: user._id, username: user.username }, process.env.JWT_SECRET || "your-secret-key", {
-      expiresIn: "7d",
-    })
+    const token = jwt.sign(
+      {
+        userId: user._id,
+        username: user.username,
+        email: user.email,
+      },
+      process.env.JWT_SECRET || "your-secret-key",
+      { expiresIn: "7d" },
+    )
+
+    console.log(`✅ User logged in: ${user.username}`)
 
     res.json({
       message: "Login successful",
@@ -92,7 +127,7 @@ router.post("/login", async (req, res) => {
     })
   } catch (error) {
     console.error("Login error:", error)
-    res.status(500).json({ message: "Server error" })
+    res.status(500).json({ message: "Server error during login" })
   }
 })
 
@@ -113,7 +148,7 @@ router.get("/verify", authenticateToken, async (req, res) => {
     })
   } catch (error) {
     console.error("Token verification error:", error)
-    res.status(500).json({ message: "Server error" })
+    res.status(500).json({ message: "Server error during verification" })
   }
 })
 
