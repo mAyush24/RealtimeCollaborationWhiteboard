@@ -1,5 +1,6 @@
 import { defineConfig } from "vite"
 import react from "@vitejs/plugin-react"
+import polyfillNode from "rollup-plugin-polyfill-node"
 
 export default defineConfig({
   plugins: [react()],
@@ -17,5 +18,13 @@ export default defineConfig({
     "process.env": {}, // prevents `process is not defined`
     global: "window", // some libs check for `global`
     Buffer: "null", // avoid Buffer import if referenced
+  },
+  build: {
+    rollupOptions: {
+      plugins: [
+        // Shims `process`, `Buffer`, `global`, etc. for browser builds
+        polyfillNode(),
+      ],
+    },
   },
 })

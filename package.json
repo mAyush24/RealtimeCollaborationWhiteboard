@@ -40,6 +40,8 @@
     "react": "^19",
     "react-dom": "^19",
     "react-router-dom": "latest",
+    "rollup": "latest",
+    "rollup-plugin-polyfill-node": "latest",
     "sass": "latest",
     "sass-embedded": "latest",
     "socket.io": "latest",
