@@ -12,4 +12,10 @@ export default defineConfig({
       },
     },
   },
+  // Rollup/Vite build-time polyfills for Node globals used by some deps
+  define: {
+    "process.env": {}, // prevents `process is not defined`
+    global: "window", // some libs check for `global`
+    Buffer: "null", // avoid Buffer import if referenced
+  },
 })
